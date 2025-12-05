@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView,
 } from 'react-native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/types';
@@ -22,7 +23,9 @@ type Props = {
 };
 
 const LoginScreen: React.FC<Props> = ({navigation}) => {
-  const [mobileNumber, setMobileNumber] = useState('');
+  const [healthId, setHealthId] = useState('MQNE-5493');
+  const [mobileNumber, setMobileNumber] = useState('7021066279');
+  const [userId, setUserId] = useState('176130');
 
   const validateMobileNumber = (number: string): boolean => {
     const mobileRegex = /^[0-9]{10}$/;
@@ -30,6 +33,11 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
   };
 
   const handleContinue = () => {
+    if (!healthId.trim()) {
+      Alert.alert('Error', 'Please enter your Health ID');
+      return;
+    }
+
     if (!mobileNumber.trim()) {
       Alert.alert('Error', 'Please enter your mobile number');
       return;
@@ -40,7 +48,12 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
       return;
     }
 
-    navigation.navigate('Chat', {mobileNumber});
+    if (!userId.trim()) {
+      Alert.alert('Error', 'Please enter your User ID');
+      return;
+    }
+
+    navigation.navigate('Chat', {healthId, mobileNumber, userId});
   };
 
   const handleMobileChange = (text: string) => {
@@ -51,49 +64,83 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
     }
   };
 
+  const isFormValid = healthId.trim() && mobileNumber.length === 10 && userId.trim();
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.logo}>Team11</Text>
-          <Text style={styles.subtitle}>Connect & Chat</Text>
-        </View>
-
-        <View style={styles.formContainer}>
-          <Text style={styles.label}>Enter Mobile Number</Text>
-          <View style={styles.inputContainer}>
-            <Text style={styles.countryCode}>+91</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter 10-digit mobile number"
-              placeholderTextColor="#8B9DC3"
-              value={mobileNumber}
-              onChangeText={handleMobileChange}
-              keyboardType="phone-pad"
-              maxLength={10}
-              autoFocus
-            />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled">
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.logo}>Team11</Text>
+            <Text style={styles.subtitle}>Connect & Chat</Text>
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.button,
-              mobileNumber.length === 10 && styles.buttonActive,
-            ]}
-            onPress={handleContinue}
-            activeOpacity={0.8}>
-            <Text style={styles.buttonText}>Continue to Chat</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.formContainer}>
+            {/* Health ID Input */}
+            <Text style={styles.label}>Health ID</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.inputFull}
+                placeholder="Enter your Health ID"
+                placeholderTextColor="#8B9DC3"
+                value={healthId}
+                onChangeText={setHealthId}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            By continuing, you agree to our Terms of Service
-          </Text>
+            {/* Mobile Number Input */}
+            <Text style={styles.label}>Mobile Number</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.countryCode}>+91</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 10-digit mobile number"
+                placeholderTextColor="#8B9DC3"
+                value={mobileNumber}
+                onChangeText={handleMobileChange}
+                keyboardType="phone-pad"
+                maxLength={10}
+              />
+            </View>
+
+            {/* User ID Input */}
+            <Text style={styles.label}>User ID</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.inputFull}
+                placeholder="Enter your User ID"
+                placeholderTextColor="#8B9DC3"
+                value={userId}
+                onChangeText={setUserId}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                isFormValid && styles.buttonActive,
+              ]}
+              onPress={handleContinue}
+              activeOpacity={0.8}>
+              <Text style={styles.buttonText}>Continue to Chat</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              By continuing, you agree to our Terms of Service
+            </Text>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -102,6 +149,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0A1628',
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   content: {
     flex: 1,
@@ -160,6 +210,13 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(0, 217, 255, 0.3)',
   },
   input: {
+    flex: 1,
+    fontSize: 18,
+    color: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  inputFull: {
     flex: 1,
     fontSize: 18,
     color: '#FFFFFF',
