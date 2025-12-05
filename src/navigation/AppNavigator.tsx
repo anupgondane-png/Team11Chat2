@@ -8,6 +8,7 @@ import LoginScreen from '../screens/LoginScreen';
 import LoggedInScreen from '../screens/LoggedInScreen';
 import ChatScreen from '../screens/ChatScreen';
 import {clearPatientAuth} from '../features/auth';
+import {ToastProvider} from '../components';
 import type {RootStackParamList} from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -52,38 +53,40 @@ const LogoutButton = ({navigation}: {navigation: any}) => {
 
 const AppNavigator: React.FC = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="Splash"
-        screenOptions={{
-          headerShown: false,
-          animation: 'fade',
-          contentStyle: {backgroundColor: '#0D1B2A'},
-        }}>
-        <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="LoggedIn" component={LoggedInScreen} />
-        <Stack.Screen
-          name="Chat"
-          component={ChatScreen}
-          options={({navigation}) => ({
-            headerShown: true,
-            headerTitle: '❤️ HridAI Consultation',
-            headerStyle: {
-              backgroundColor: '#0D1B2A',
-            },
-            headerTintColor: '#DC3545',
-            headerTitleStyle: {
-              fontWeight: '700',
-              fontSize: 17,
-            },
-            headerBackTitle: 'Back',
-            headerShadowVisible: false,
-            headerRight: () => <LogoutButton navigation={navigation} />,
-          })}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <ToastProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName="Splash"
+          screenOptions={{
+            headerShown: false,
+            animation: 'fade',
+            contentStyle: {backgroundColor: '#0D1B2A'},
+          }}>
+          <Stack.Screen name="Splash" component={SplashScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="LoggedIn" component={LoggedInScreen} />
+          <Stack.Screen
+            name="Chat"
+            component={ChatScreen}
+            options={({navigation}) => ({
+              headerShown: true,
+              headerTitle: '❤️ HridAI Consultation',
+              headerStyle: {
+                backgroundColor: '#0D1B2A',
+              },
+              headerTintColor: '#DC3545',
+              headerTitleStyle: {
+                fontWeight: '700',
+                fontSize: 17,
+              },
+              headerBackTitle: 'Back',
+              headerShadowVisible: false,
+              headerRight: () => <LogoutButton navigation={navigation} />,
+            })}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ToastProvider>
   );
 };
 

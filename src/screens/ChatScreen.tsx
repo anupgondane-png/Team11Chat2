@@ -13,11 +13,11 @@ import {
   Alert,
   Keyboard,
 } from 'react-native';
+import {showToast} from '../components';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {CommonActions} from '@react-navigation/native';
 import type {RootStackParamList} from '../navigation/types';
 import {
-  useSocket,
   SocketConnectionState,
   IncomingChatMessage,
   SocketErrorPayload,
@@ -25,6 +25,7 @@ import {
   SOCKET_CONFIG,
 } from '../features/socket';
 import { useSession } from '../features/session';
+import { useChat } from '../features/chat';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -252,16 +253,13 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
     }
   }, [userId]);
 
-  // Handle socket errors
+  // Handle socket errors - show toast instead of message in chat
   const handleSocketError = useCallback((error: SocketErrorPayload) => {
     console.error('[ChatScreen] Socket error:', error);
-    const errorMessage: Message = {
-      id: Date.now().toString(),
-      text: `⚠️ Connection issue: ${error.message}. Please try again.`,
-      sender: 'doctor',
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, errorMessage]);
+    // Stop waiting indicator
+    setIsWaitingForResponse(false);
+    // Show toast instead of adding error message to chat
+    showToast(`Connection issue: ${error.message}`, 'error');
   }, []);
 
   // Handle consultation offer events
@@ -279,7 +277,8 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
     setMessages(prev => [...prev, consultationMessage]);
   }, []);
 
-  // Initialize socket connection with session token
+  // Initialize chat connection with session token
+  // Uses socket or API based on enableSocketFlag configuration
   const {
     isConnected,
     connectionState,
@@ -289,7 +288,8 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
     sendTextMessage,
     sendTypingIndicator,
     error: socketError,
-  } = useSocket({
+    isSocketMode,
+  } = useChat({
     sessionToken: sessionToken || '',
     autoConnect: !!sessionToken,
     onMessage: handleIncomingMessage,
@@ -298,6 +298,11 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
     onError: handleSocketError,
     onConsultationOffer: handleConsultationOffer,
   });
+
+  // Log the current communication mode
+  useEffect(() => {
+    console.log('[ChatScreen] Communication mode:', isSocketMode ? 'WebSocket' : 'API Polling');
+  }, [isSocketMode]);
 
   // Add welcome message when connected
   useEffect(() => {
@@ -476,9 +481,10 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
 
   // Get connection status
   const getConnectionStatus = () => {
+    const modeLabel = isSocketMode ? '' : ' (API)';
     switch (connectionState) {
       case SocketConnectionState.CONNECTED:
-        return { text: 'Online', color: '#28A745', icon: '🟢' };
+        return { text: `Online${modeLabel}`, color: '#28A745', icon: '🟢' };
       case SocketConnectionState.CONNECTING:
         return { text: 'Connecting...', color: '#FFC107', icon: '🟡' };
       case SocketConnectionState.RECONNECTING:
@@ -562,8 +568,8 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
         </Text>
       </View>
 
-      {/* Reconnect Banner */}
-      {socketError && (
+      {/* Reconnect Banner - only show in socket mode */}
+      {socketError && isSocketMode && (
         <TouchableOpacity style={styles.reconnectBanner} onPress={() => connect()}>
           <Text style={styles.reconnectIcon}>⚡</Text>
           <Text style={styles.reconnectText}>Connection lost. Tap to reconnect</Text>
