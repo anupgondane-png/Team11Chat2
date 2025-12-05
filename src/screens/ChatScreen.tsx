@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  Keyboard,
 } from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {CommonActions} from '@react-navigation/native';
@@ -163,6 +164,7 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
   const [screenState, setScreenState] = useState<ScreenState>('loading_session');
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -321,6 +323,23 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
     };
   }, [disconnect]);
 
+  // Track keyboard visibility
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setIsKeyboardVisible(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setIsKeyboardVisible(false)
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
   // Handle connection loss - navigate back to Login screen
   useEffect(() => {
     // Only trigger if we had a session and connection failed after max reconnect attempts
@@ -412,6 +431,9 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
     };
     setMessages(prev => [...prev, newMessage]);
     setMessage('');
+    
+    // Dismiss keyboard on send
+    Keyboard.dismiss();
     
     // Start waiting for response animation
     setIsWaitingForResponse(true);
@@ -578,18 +600,20 @@ const ChatScreen: React.FC<Props> = ({route, navigation}) => {
         }
       />
 
-      {/* Quick Actions */}
-      <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('I have chest pain')}>
-          <Text style={styles.quickActionText}>💔 Chest Pain</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('I feel shortness of breath')}>
-          <Text style={styles.quickActionText}>😮‍💨 Breathing</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('My heart is racing')}>
-          <Text style={styles.quickActionText}>💓 Palpitations</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Quick Actions - hidden when keyboard is visible */}
+      {!isKeyboardVisible && (
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('I have chest pain')}>
+            <Text style={styles.quickActionText}>💔 Chest</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('I feel shortness of breath')}>
+            <Text style={styles.quickActionText}>😮‍💨 Breath</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('My heart is racing')}>
+            <Text style={styles.quickActionText}>💓 Racing</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Input Area */}
       <View style={styles.inputContainer}>
