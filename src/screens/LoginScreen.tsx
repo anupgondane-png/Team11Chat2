@@ -9,7 +9,8 @@ import {
   Platform,
   Alert,
   ScrollView,
-  Switch,
+  Modal,
+  Pressable,
 } from 'react-native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/types';
@@ -42,32 +43,58 @@ const StethoscopeDecor = () => (
   </View>
 );
 
-// Default credentials
-const DEFAULT_CREDENTIALS = {
-  healthId: 'MQNE-5493',
-  mobileNumber: '7021066279',
-  userId: '176130',
-};
+// Preset user credentials
+const PRESET_USERS = [
+  {
+    id: 'anup',
+    name: 'Anup',
+    healthId: 'MQNE-5493',
+    mobileNumber: '7021066279',
+    userId: '176130',
+  },
+  {
+    id: 'rajeev',
+    name: 'Rajeev',
+    healthId: 'RJVK-2847',
+    mobileNumber: '9876543210',
+    userId: '200001',
+  },
+  {
+    id: 'pankaj',
+    name: 'Pankaj',
+    healthId: 'PNKJ-6521',
+    mobileNumber: '8888777766',
+    userId: '300002',
+  },
+  {
+    id: 'pradip',
+    name: 'Pradip',
+    healthId: 'PRDP-4938',
+    mobileNumber: '7777888899',
+    userId: '400003',
+  },
+  {
+    id: 'manual',
+    name: 'Enter Manually',
+    healthId: '',
+    mobileNumber: '',
+    userId: '',
+  },
+];
 
 const LoginScreen: React.FC<Props> = ({navigation}) => {
-  const [useDefaultCredentials, setUseDefaultCredentials] = useState(true);
-  const [healthId, setHealthId] = useState(DEFAULT_CREDENTIALS.healthId);
-  const [mobileNumber, setMobileNumber] = useState(DEFAULT_CREDENTIALS.mobileNumber);
-  const [userId, setUserId] = useState(DEFAULT_CREDENTIALS.userId);
+  const [selectedUser, setSelectedUser] = useState<typeof PRESET_USERS[0] | null>(null);
+  const [healthId, setHealthId] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [userId, setUserId] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const handleToggleDefault = (value: boolean) => {
-    setUseDefaultCredentials(value);
-    if (value) {
-      // Prefill with default credentials
-      setHealthId(DEFAULT_CREDENTIALS.healthId);
-      setMobileNumber(DEFAULT_CREDENTIALS.mobileNumber);
-      setUserId(DEFAULT_CREDENTIALS.userId);
-    } else {
-      // Clear fields for manual entry
-      setHealthId('');
-      setMobileNumber('');
-      setUserId('');
-    }
+  const handleSelectUser = (user: typeof PRESET_USERS[0]) => {
+    setSelectedUser(user);
+    setHealthId(user.healthId);
+    setMobileNumber(user.mobileNumber);
+    setUserId(user.userId);
+    setIsDropdownOpen(false);
   };
 
   const validateMobileNumber = (number: string): boolean => {
@@ -152,20 +179,106 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
               <View style={styles.formDivider} />
             </View>
 
-            {/* Default Credentials Toggle */}
-            <View style={styles.toggleContainer}>
-              <View style={styles.toggleLabelContainer}>
-                <Text style={styles.toggleIcon}>🔑</Text>
-                <Text style={styles.toggleLabel}>Use Default Credentials</Text>
+            {/* User Selection Dropdown */}
+            <Text style={styles.label}>
+              <Text style={styles.labelIcon}>🩺 </Text>
+              Quick Select Patient
+            </Text>
+            <TouchableOpacity
+              style={styles.dropdownContainer}
+              onPress={() => setIsDropdownOpen(true)}
+              activeOpacity={0.7}>
+              <View style={styles.dropdownLeftSection}>
+                <View style={[
+                  styles.dropdownAvatarContainer,
+                  !selectedUser && styles.dropdownAvatarPlaceholder,
+                ]}>
+                  <Text style={styles.dropdownAvatar}>
+                    {selectedUser
+                      ? selectedUser.id === 'manual'
+                        ? '✏️'
+                        : selectedUser.name.charAt(0)
+                      : '👤'}
+                  </Text>
+                </View>
+                <View style={styles.dropdownTextContainer}>
+                  <Text style={[
+                    styles.dropdownValue,
+                    !selectedUser && styles.dropdownPlaceholder,
+                  ]}>
+                    {selectedUser
+                      ? selectedUser.id === 'manual'
+                        ? 'Enter Manually'
+                        : selectedUser.name
+                      : 'Select a patient...'}
+                  </Text>
+                  {selectedUser && selectedUser.id !== 'manual' && (
+                    <Text style={styles.dropdownSubtext}>
+                      ID: {selectedUser.healthId}
+                    </Text>
+                  )}
+                </View>
               </View>
-              <Switch
-                value={useDefaultCredentials}
-                onValueChange={handleToggleDefault}
-                trackColor={{false: 'rgba(160, 180, 200, 0.3)', true: 'rgba(220, 53, 69, 0.5)'}}
-                thumbColor={useDefaultCredentials ? '#DC3545' : '#A0B4C8'}
-                ios_backgroundColor="rgba(160, 180, 200, 0.3)"
-              />
-            </View>
+              <View style={styles.dropdownArrowContainer}>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Custom Dropdown Modal */}
+            <Modal
+              visible={isDropdownOpen}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setIsDropdownOpen(false)}>
+              <Pressable
+                style={styles.modalOverlay}
+                onPress={() => setIsDropdownOpen(false)}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>🩺 Select Patient</Text>
+                    <TouchableOpacity
+                      onPress={() => setIsDropdownOpen(false)}
+                      style={styles.modalCloseButton}>
+                      <Text style={styles.modalCloseText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.modalDivider} />
+                  <ScrollView style={styles.modalList}>
+                    {PRESET_USERS.map((user, index) => (
+                      <TouchableOpacity
+                        key={user.id}
+                        style={[
+                          styles.modalOption,
+                          selectedUser?.id === user.id && styles.modalOptionSelected,
+                          index === PRESET_USERS.length - 1 && styles.modalOptionLast,
+                        ]}
+                        onPress={() => handleSelectUser(user)}
+                        activeOpacity={0.7}>
+                        <View style={[
+                          styles.modalOptionAvatar,
+                          user.id === 'manual' && styles.modalOptionAvatarManual,
+                        ]}>
+                          <Text style={styles.modalOptionAvatarText}>
+                            {user.id === 'manual' ? '✏️' : user.name.charAt(0)}
+                          </Text>
+                        </View>
+                        <View style={styles.modalOptionTextContainer}>
+                          <Text style={styles.modalOptionName}>{user.name}</Text>
+                          {user.id !== 'manual' && (
+                            <Text style={styles.modalOptionDetails}>
+                              Health ID: {user.healthId} • Mobile: {user.mobileNumber}
+                            </Text>
+                          )}
+                        </View>
+                        {selectedUser?.id === user.id && (
+                          <Text style={styles.modalOptionCheck}>✓</Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </Pressable>
+            </Modal>
 
             {/* Health ID Input */}
             <Text style={styles.label}>
@@ -417,29 +530,177 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginTop: 12,
   },
-  toggleContainer: {
+  dropdownContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-    borderRadius: 12,
-    padding: 14,
+    backgroundColor: 'rgba(13, 27, 42, 0.8)',
+    borderRadius: 14,
+    padding: 12,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(220, 53, 69, 0.2)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(220, 53, 69, 0.4)',
   },
-  toggleLabelContainer: {
+  dropdownLeftSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
-  toggleIcon: {
+  dropdownAvatarContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(220, 53, 69, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(220, 53, 69, 0.4)',
+  },
+  dropdownAvatar: {
+    fontSize: 18,
+    color: '#DC3545',
+    fontWeight: '700',
+  },
+  dropdownTextContainer: {
+    flex: 1,
+  },
+  dropdownValue: {
     fontSize: 16,
-    marginRight: 10,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    color: '#E8E8E8',
+    color: '#FFFFFF',
     fontWeight: '600',
+  },
+  dropdownSubtext: {
+    fontSize: 12,
+    color: '#17A2B8',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  dropdownArrowContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownArrow: {
+    fontSize: 10,
+    color: '#DC3545',
+  },
+  dropdownAvatarPlaceholder: {
+    backgroundColor: 'rgba(160, 180, 200, 0.15)',
+    borderColor: 'rgba(160, 180, 200, 0.3)',
+  },
+  dropdownPlaceholder: {
+    color: '#7A8FA6',
+    fontWeight: '400',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '70%',
+    backgroundColor: '#0D1B2A',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.3)',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 18,
+    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    fontSize: 16,
+    color: '#A0B4C8',
+    fontWeight: '600',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: 'rgba(220, 53, 69, 0.2)',
+  },
+  modalList: {
+    padding: 8,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  modalOptionSelected: {
+    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.4)',
+  },
+  modalOptionLast: {
+    marginBottom: 8,
+  },
+  modalOptionAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(220, 53, 69, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(220, 53, 69, 0.4)',
+  },
+  modalOptionAvatarManual: {
+    backgroundColor: 'rgba(23, 162, 184, 0.2)',
+    borderColor: 'rgba(23, 162, 184, 0.4)',
+  },
+  modalOptionAvatarText: {
+    fontSize: 20,
+    color: '#DC3545',
+    fontWeight: '700',
+  },
+  modalOptionTextContainer: {
+    flex: 1,
+  },
+  modalOptionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  modalOptionDetails: {
+    fontSize: 12,
+    color: '#17A2B8',
+    fontWeight: '500',
+  },
+  modalOptionCheck: {
+    fontSize: 18,
+    color: '#DC3545',
+    fontWeight: '700',
+    marginLeft: 8,
   },
   label: {
     fontSize: 13,

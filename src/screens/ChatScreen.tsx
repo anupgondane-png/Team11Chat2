@@ -10,8 +10,10 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
+  Alert,
 } from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {CommonActions} from '@react-navigation/native';
 import type {RootStackParamList} from '../navigation/types';
 import {
   useSocket,
@@ -19,6 +21,7 @@ import {
   IncomingChatMessage,
   SocketErrorPayload,
   ConsultationOfferPayload,
+  SOCKET_CONFIG,
 } from '../features/socket';
 import { useSession } from '../features/session';
 
@@ -38,13 +41,6 @@ type ScreenState = 'loading_session' | 'session_error' | 'ready';
 const DoctorAvatar = ({size = 44}: {size?: number}) => (
   <View style={[styles.doctorAvatar, {width: size, height: size, borderRadius: size / 2}]}>
     <Text style={[styles.doctorAvatarEmoji, {fontSize: size * 0.5}]}>👨‍⚕️</Text>
-  </View>
-);
-
-// Patient Avatar Component  
-const PatientAvatar = ({initials, size = 44}: {initials: string; size?: number}) => (
-  <View style={[styles.patientAvatar, {width: size, height: size, borderRadius: size / 2}]}>
-    <Text style={[styles.patientAvatarText, {fontSize: size * 0.35}]}>{initials}</Text>
   </View>
 );
 
@@ -158,7 +154,7 @@ const HeartRateIndicator = () => (
   </View>
 );
 
-const ChatScreen: React.FC<Props> = ({route}) => {
+const ChatScreen: React.FC<Props> = ({route, navigation}) => {
   const {healthId, mobileNumber, userId} = route.params;
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -169,9 +165,6 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Get patient initials
-  const patientInitials = userId.slice(0, 2).toUpperCase();
 
   // Session management
   const {
@@ -288,6 +281,7 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   const {
     isConnected,
     connectionState,
+    connectionInfo,
     connect,
     disconnect,
     sendTextMessage,
@@ -326,6 +320,39 @@ const ChatScreen: React.FC<Props> = ({route}) => {
       disconnect();
     };
   }, [disconnect]);
+
+  // Handle connection loss - navigate back to Login screen
+  useEffect(() => {
+    // Only trigger if we had a session and connection failed after max reconnect attempts
+    if (
+      sessionToken &&
+      connectionState === SocketConnectionState.ERROR &&
+      connectionInfo.reconnectAttempts >= SOCKET_CONFIG.MAX_RECONNECT_ATTEMPTS
+    ) {
+      console.log('[ChatScreen] Connection lost after max reconnect attempts, navigating to Login');
+      
+      // Show alert to user before navigating
+      Alert.alert(
+        'Connection Lost',
+        'Unable to maintain connection to the consultation service. Please log in again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Reset navigation stack and go to Login
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{name: 'Login'}],
+                })
+              );
+            },
+          },
+        ],
+        {cancelable: false}
+      );
+    }
+  }, [connectionState, connectionInfo.reconnectAttempts, sessionToken, navigation]);
 
   // Retry session initialization
   const retrySession = useCallback(async () => {
@@ -421,8 +448,6 @@ const ChatScreen: React.FC<Props> = ({route}) => {
             {formatTime(item.timestamp)}
           </Text>
         </View>
-        
-        {!isDoctor && <PatientAvatar initials={patientInitials} size={36} />}
       </View>
     );
   };
@@ -941,7 +966,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(23, 162, 184, 0.2)',
   },
   patientBubble: {
-    backgroundColor: '#DC3545',
+    backgroundColor: 'rgba(220, 53, 69, 0.1)',
     borderBottomRightRadius: 4,
   },
   messageText: {
@@ -964,17 +989,6 @@ const styles = StyleSheet.create({
   },
   patientTimestamp: {
     color: '#6C8EAD',
-  },
-  patientAvatar: {
-    backgroundColor: '#DC3545',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(220, 53, 69, 0.5)',
-  },
-  patientAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
   // Quick Actions
   quickActions: {
@@ -1049,7 +1063,8 @@ const styles = StyleSheet.create({
   // Disclaimer
   disclaimerBar: {
     backgroundColor: 'rgba(220, 53, 69, 0.1)',
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 16,
     paddingHorizontal: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(220, 53, 69, 0.2)',

@@ -151,7 +151,7 @@ class SocketService {
   private handleIncomingMessage(data: string): void {
     try {
       console.log('[SocketService] ========== MESSAGE RECEIVED ==========');
-      console.log('[SocketService] Raw data:', data);
+      console.log('[SocketService] Raw data:', JSON.stringify(data, null, 1));
       
       const rawMessage = JSON.parse(data);
       
@@ -191,7 +191,7 @@ class SocketService {
     try {
       const messageString = JSON.stringify(message);
       console.log('[SocketService] ========== SENDING MESSAGE ==========');
-      console.log('[SocketService] Message:', messageString);
+      console.log('[SocketService] Message:', JSON.stringify(message, null, 1));
       console.log('[SocketService] ======================================');
       this.socket.send(messageString);
       return true;
