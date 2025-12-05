@@ -54,6 +54,9 @@ export enum SocketMessageType {
   USER_OFFLINE = 'user_offline',
   ERROR = 'error',
   
+  // Consultation events
+  CONSULTATION_OFFER = 'consultation_offer',
+  
   // Connection events
   CONNECTED = 'connected',
   DISCONNECTED = 'disconnected',

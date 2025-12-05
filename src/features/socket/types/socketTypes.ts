@@ -67,6 +67,23 @@ export interface TypingIndicatorPayload {
 }
 
 /**
+ * Consultation offer payload - received when doctor consultation is being arranged
+ */
+export interface ConsultationOfferPayload {
+  message_code: number;
+  message_type: string;
+  conversation_id: string;
+  message: {
+    header1?: string;
+    header2?: string;
+    header3?: string;
+  };
+  timestamp: string;
+  trace_id: string;
+  message_id?: string | null;
+}
+
+/**
  * Read receipt payload
  */
 export interface ReadReceiptPayload {

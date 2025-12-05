@@ -153,7 +153,15 @@ class SocketService {
       console.log('[SocketService] ========== MESSAGE RECEIVED ==========');
       console.log('[SocketService] Raw data:', data);
       
-      const message: SocketMessage = JSON.parse(data);
+      const rawMessage = JSON.parse(data);
+      
+      // Normalize the message format - handle both 'type' and 'message_type' fields
+      const message: SocketMessage = {
+        ...rawMessage,
+        type: rawMessage.type || rawMessage.message_type,
+        payload: rawMessage.payload || rawMessage,
+      };
+      
       console.log('[SocketService] Parsed message type:', message.type);
       console.log('[SocketService] Message content:', JSON.stringify(message, null, 2));
       console.log('[SocketService] =======================================');

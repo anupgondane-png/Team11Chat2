@@ -24,6 +24,7 @@ export type {
   SocketConnectionInfo,
   SocketEventHandlers,
   SocketServiceOptions,
+  ConsultationOfferPayload,
 } from './types/socketTypes';
 
 // Services

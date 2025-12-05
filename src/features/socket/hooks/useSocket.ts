@@ -12,6 +12,7 @@ import {
   SocketErrorPayload,
   IncomingChatMessage,
   AIResponsePayload,
+  ConsultationOfferPayload,
 } from '../types/socketTypes';
 
 interface UseSocketOptions {
@@ -21,6 +22,7 @@ interface UseSocketOptions {
   onAIResponse?: (response: string) => void;
   onTyping?: (userId: string, isTyping: boolean) => void;
   onError?: (error: SocketErrorPayload) => void;
+  onConsultationOffer?: (payload: ConsultationOfferPayload) => void;
 }
 
 interface UseSocketReturn {
@@ -46,6 +48,7 @@ export const useSocket = (options: UseSocketOptions): UseSocketReturn => {
     onAIResponse,
     onTyping,
     onError,
+    onConsultationOffer,
   } = options;
 
   const [isConnected, setIsConnected] = useState(false);
@@ -125,6 +128,16 @@ export const useSocket = (options: UseSocketOptions): UseSocketReturn => {
           }
           break;
 
+        case SocketMessageType.CONSULTATION_OFFER:
+        case 'consultation_offer':
+          console.log('[useSocket] Consultation offer received');
+          if (onConsultationOffer) {
+            // The message itself contains the consultation offer data
+            const consultationPayload = message.payload as ConsultationOfferPayload || message as unknown as ConsultationOfferPayload;
+            onConsultationOffer(consultationPayload);
+          }
+          break;
+
         default:
           console.log('[useSocket] Unhandled message type:', message.type);
           // Try to extract any message content for unknown types
@@ -141,7 +154,7 @@ export const useSocket = (options: UseSocketOptions): UseSocketReturn => {
           }
       }
     },
-    [onMessage, onAIResponse, onTyping, onError]
+    [onMessage, onAIResponse, onTyping, onError, onConsultationOffer]
   );
 
   /**

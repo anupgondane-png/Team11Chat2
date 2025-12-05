@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/types';
@@ -17,6 +18,7 @@ import {
   SocketConnectionState,
   IncomingChatMessage,
   SocketErrorPayload,
+  ConsultationOfferPayload,
 } from '../features/socket';
 import { useSession } from '../features/session';
 
@@ -25,12 +27,136 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 type Message = {
   id: string;
   text: string;
-  sender: 'user' | 'other';
+  sender: 'user' | 'doctor';
   timestamp: Date;
 };
 
 // Screen states
 type ScreenState = 'loading_session' | 'session_error' | 'ready';
+
+// Doctor Avatar Component
+const DoctorAvatar = ({size = 44}: {size?: number}) => (
+  <View style={[styles.doctorAvatar, {width: size, height: size, borderRadius: size / 2}]}>
+    <Text style={[styles.doctorAvatarEmoji, {fontSize: size * 0.5}]}>👨‍⚕️</Text>
+  </View>
+);
+
+// Patient Avatar Component  
+const PatientAvatar = ({initials, size = 44}: {initials: string; size?: number}) => (
+  <View style={[styles.patientAvatar, {width: size, height: size, borderRadius: size / 2}]}>
+    <Text style={[styles.patientAvatarText, {fontSize: size * 0.35}]}>{initials}</Text>
+  </View>
+);
+
+// Typing Indicator with animated dots
+const TypingIndicator = () => {
+  const [dots, setDots] = useState('');
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(prev => prev.length >= 3 ? '' : prev + '.');
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <View style={styles.typingContainer}>
+      <DoctorAvatar size={32} />
+      <View style={styles.typingBubble}>
+        <Text style={styles.typingText}>Dr. HridAI is typing{dots}</Text>
+      </View>
+    </View>
+  );
+};
+
+// Animated Responding Indicator - shown while waiting for bot response
+const RespondingIndicator = () => {
+  const dot1Anim = useRef(new Animated.Value(0)).current;
+  const dot2Anim = useRef(new Animated.Value(0)).current;
+  const dot3Anim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Bouncing dots animation
+    const createBounce = (animValue: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(animValue, {
+            toValue: -8,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(animValue, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    };
+
+    // Pulse animation for the container
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.02,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const bounce1 = createBounce(dot1Anim, 0);
+    const bounce2 = createBounce(dot2Anim, 150);
+    const bounce3 = createBounce(dot3Anim, 300);
+
+    bounce1.start();
+    bounce2.start();
+    bounce3.start();
+    pulseAnimation.start();
+
+    return () => {
+      bounce1.stop();
+      bounce2.stop();
+      bounce3.stop();
+      pulseAnimation.stop();
+    };
+  }, [dot1Anim, dot2Anim, dot3Anim, pulseAnim]);
+
+  return (
+    <View style={styles.respondingContainer}>
+      <DoctorAvatar size={36} />
+      <Animated.View style={[styles.respondingBubble, { transform: [{ scale: pulseAnim }] }]}>
+        <View style={styles.respondingContent}>
+          <Text style={styles.respondingIcon}>🩺</Text>
+          <Text style={styles.respondingText}>Dr. HridAI is analyzing</Text>
+          <View style={styles.dotsContainer}>
+            <Animated.View style={[styles.dot, { transform: [{ translateY: dot1Anim }] }]} />
+            <Animated.View style={[styles.dot, { transform: [{ translateY: dot2Anim }] }]} />
+            <Animated.View style={[styles.dot, { transform: [{ translateY: dot3Anim }] }]} />
+          </View>
+        </View>
+        <View style={styles.respondingSubtextContainer}>
+          <Text style={styles.respondingSubtext}>💓 Processing your health query</Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
+
+// Heart Rate Animation Component
+const HeartRateIndicator = () => (
+  <View style={styles.heartRateContainer}>
+    <Text style={styles.heartRateIcon}>💓</Text>
+    <Text style={styles.heartRateText}>~∿∿~</Text>
+  </View>
+);
 
 const ChatScreen: React.FC<Props> = ({route}) => {
   const {healthId, mobileNumber, userId} = route.params;
@@ -40,8 +166,12 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [screenState, setScreenState] = useState<ScreenState>('loading_session');
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Get patient initials
+  const patientInitials = userId.slice(0, 2).toUpperCase();
 
   // Session management
   const {
@@ -61,7 +191,7 @@ const ChatScreen: React.FC<Props> = ({route}) => {
       
       const sessionData = await getOrCreateSession({
         userId: userId,
-        userJhhId: healthId, // Using healthId as JHH ID
+        userJhhId: healthId,
       });
 
       if (sessionData && sessionData.session_token) {
@@ -78,13 +208,30 @@ const ChatScreen: React.FC<Props> = ({route}) => {
     initializeSession();
   }, [userId, healthId, getOrCreateSession, hasExistingSession]);
 
-  // Handle incoming messages from socket (legacy format)
+  // Handle incoming messages from socket
   const handleIncomingMessage = useCallback((incomingMessage: IncomingChatMessage) => {
     console.log('[ChatScreen] Incoming message:', incomingMessage);
+    
+    // If message is from doctor/bot, stop waiting indicator
+    if (incomingMessage.senderId !== userId) {
+      setIsWaitingForResponse(false);
+    }
+    
+    // Safely convert content to string - handle case where content might be an object
+    let messageText: string;
+    if (typeof incomingMessage.content === 'string') {
+      messageText = incomingMessage.content;
+    } else if (incomingMessage.content && typeof incomingMessage.content === 'object') {
+      // If content is an object, convert it to a readable string
+      messageText = Object.values(incomingMessage.content).filter(v => v).join('\n');
+    } else {
+      messageText = String(incomingMessage.content || '');
+    }
+    
     const newMessage: Message = {
       id: incomingMessage.id,
-      text: incomingMessage.content,
-      sender: incomingMessage.senderId === userId ? 'user' : 'other',
+      text: messageText,
+      sender: incomingMessage.senderId === userId ? 'user' : 'doctor',
       timestamp: new Date(incomingMessage.timestamp),
     };
     setMessages(prev => [...prev, newMessage]);
@@ -93,10 +240,11 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   // Handle AI response from socket
   const handleAIResponse = useCallback((response: string) => {
     console.log('[ChatScreen] AI Response received:', response);
+    setIsWaitingForResponse(false);
     const aiMessage: Message = {
       id: `ai_${Date.now()}`,
       text: response,
-      sender: 'other',
+      sender: 'doctor',
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, aiMessage]);
@@ -114,11 +262,26 @@ const ChatScreen: React.FC<Props> = ({route}) => {
     console.error('[ChatScreen] Socket error:', error);
     const errorMessage: Message = {
       id: Date.now().toString(),
-      text: `Connection error: ${error.message}`,
-      sender: 'other',
+      text: `⚠️ Connection issue: ${error.message}. Please try again.`,
+      sender: 'doctor',
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, errorMessage]);
+  }, []);
+
+  // Handle consultation offer events
+  const handleConsultationOffer = useCallback((payload: ConsultationOfferPayload) => {
+    console.log('[ChatScreen] Consultation offer received:', payload);
+    setIsWaitingForResponse(false);
+    
+    // Build a friendly message for the user
+    const consultationMessage: Message = {
+      id: `consultation_${Date.now()}`,
+      text: `🩺 **Connecting you to a specialist**\n\nBased on your symptoms and health information, I'm arranging a consultation with a qualified cardiologist for you.\n\n✅ Your case has been reviewed\n✅ A doctor will be connected shortly\n✅ Please stay on this screen\n\n💡 **Recommendations while you wait:**\n• Keep your health ID and medical history handy\n• Note down any specific questions you'd like to ask\n• Ensure you're in a quiet place for the consultation\n\n_A specialist will join this conversation soon to provide personalized guidance for your cardiac health._`,
+      sender: 'doctor',
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, consultationMessage]);
   }, []);
 
   // Initialize socket connection with session token
@@ -132,11 +295,12 @@ const ChatScreen: React.FC<Props> = ({route}) => {
     error: socketError,
   } = useSocket({
     sessionToken: sessionToken || '',
-    autoConnect: !!sessionToken, // Only auto-connect when we have a session token
+    autoConnect: !!sessionToken,
     onMessage: handleIncomingMessage,
     onAIResponse: handleAIResponse,
     onTyping: handleTyping,
     onError: handleSocketError,
+    onConsultationOffer: handleConsultationOffer,
   });
 
   // Add welcome message when connected
@@ -145,8 +309,8 @@ const ChatScreen: React.FC<Props> = ({route}) => {
       setMessages([
         {
           id: '1',
-          text: 'Hello! I\'m your cardiac health assistant. How are you feeling today? Are you experiencing any chest discomfort, shortness of breath, or heart-related concerns I can help you with?',
-          sender: 'other',
+          text: `Hello! I'm Dr. HridAI, your AI cardiologist assistant. 🩺\n\nI'm here to help you with:\n• Heart health questions\n• Understanding symptoms\n• Lifestyle recommendations\n• Medication guidance\n\nHow can I assist you with your cardiac health today?`,
+          sender: 'doctor',
           timestamp: new Date(),
         },
       ]);
@@ -185,18 +349,15 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   const handleTextChange = (text: string) => {
     setMessage(text);
 
-    // Send typing indicator
     if (text.length > 0 && !isTyping) {
       setIsTyping(true);
       sendTypingIndicator(userId, true);
     }
 
-    // Clear previous timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set timeout to stop typing indicator
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       sendTypingIndicator(userId, false);
@@ -210,14 +371,12 @@ const ChatScreen: React.FC<Props> = ({route}) => {
 
     const messageText = message.trim();
 
-    // Clear typing indicator
     setIsTyping(false);
     sendTypingIndicator(userId, false);
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Add message to local state immediately for optimistic UI
     const newMessage: Message = {
       id: Date.now().toString(),
       text: messageText,
@@ -226,13 +385,15 @@ const ChatScreen: React.FC<Props> = ({route}) => {
     };
     setMessages(prev => [...prev, newMessage]);
     setMessage('');
+    
+    // Start waiting for response animation
+    setIsWaitingForResponse(true);
 
-    // Send text_message through socket
-    // Format: { "type": "text_message", "message": "user's message" }
     console.log('[ChatScreen] Sending text_message:', messageText);
     const sent = sendTextMessage(messageText);
     if (!sent) {
       console.warn('[ChatScreen] Failed to send message through socket');
+      setIsWaitingForResponse(false);
     }
   };
 
@@ -241,51 +402,44 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   };
 
   const renderMessage = ({item}: {item: Message}) => {
-    const isUser = item.sender === 'user';
+    const isDoctor = item.sender === 'doctor';
 
     return (
-      <View
-        style={[
-          styles.messageContainer,
-          isUser ? styles.userMessageContainer : styles.otherMessageContainer,
-        ]}>
-        <View
-          style={[
-            styles.messageBubble,
-            isUser ? styles.userBubble : styles.otherBubble,
-          ]}>
-          <Text
-            style={[
-              styles.messageText,
-              isUser ? styles.userMessageText : styles.otherMessageText,
-            ]}>
-            {item.text}
-          </Text>
-          <Text
-            style={[
-              styles.timestamp,
-              isUser ? styles.userTimestamp : styles.otherTimestamp,
-            ]}>
+      <View style={[styles.messageRow, isDoctor ? styles.doctorRow : styles.patientRow]}>
+        {isDoctor && <DoctorAvatar size={36} />}
+        
+        <View style={[styles.messageContent, isDoctor ? styles.doctorContent : styles.patientContent]}>
+          {isDoctor && <Text style={styles.senderLabel}>Dr. HridAI</Text>}
+          
+          <View style={[styles.messageBubble, isDoctor ? styles.doctorBubble : styles.patientBubble]}>
+            <Text style={[styles.messageText, isDoctor ? styles.doctorText : styles.patientText]}>
+              {item.text}
+            </Text>
+          </View>
+          
+          <Text style={[styles.timestamp, isDoctor ? styles.doctorTimestamp : styles.patientTimestamp]}>
             {formatTime(item.timestamp)}
           </Text>
         </View>
+        
+        {!isDoctor && <PatientAvatar initials={patientInitials} size={36} />}
       </View>
     );
   };
 
-  // Get connection status text and color
+  // Get connection status
   const getConnectionStatus = () => {
     switch (connectionState) {
       case SocketConnectionState.CONNECTED:
-        return { text: 'Online', color: '#00FF88' };
+        return { text: 'Online', color: '#28A745', icon: '🟢' };
       case SocketConnectionState.CONNECTING:
-        return { text: 'Connecting...', color: '#FFB800' };
+        return { text: 'Connecting...', color: '#FFC107', icon: '🟡' };
       case SocketConnectionState.RECONNECTING:
-        return { text: 'Reconnecting...', color: '#FFB800' };
+        return { text: 'Reconnecting...', color: '#FFC107', icon: '🟡' };
       case SocketConnectionState.ERROR:
-        return { text: 'Connection Error', color: '#FF4444' };
+        return { text: 'Offline', color: '#DC3545', icon: '🔴' };
       default:
-        return { text: 'Offline', color: '#8B9DC3' };
+        return { text: 'Offline', color: '#6C757D', icon: '⚪' };
     }
   };
 
@@ -295,9 +449,13 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   if (screenState === 'loading_session') {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D9FF" />
-        <Text style={styles.loadingText}>Initializing session...</Text>
-        <Text style={styles.loadingSubtext}>Please wait while we set up your chat</Text>
+        <View style={styles.loadingCard}>
+          <Text style={styles.loadingIcon}>🩺</Text>
+          <ActivityIndicator size="large" color="#DC3545" style={styles.loadingSpinner} />
+          <Text style={styles.loadingTitle}>Preparing Your Consultation</Text>
+          <Text style={styles.loadingSubtext}>Connecting you with Dr. HridAI...</Text>
+          <HeartRateIndicator />
+        </View>
       </View>
     );
   }
@@ -306,14 +464,16 @@ const ChatScreen: React.FC<Props> = ({route}) => {
   if (screenState === 'session_error') {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorIcon}>⚠️</Text>
-        <Text style={styles.errorTitle}>Session Error</Text>
-        <Text style={styles.errorMessage}>
-          {sessionError?.message || 'Failed to initialize session'}
-        </Text>
-        <TouchableOpacity style={styles.retryButton} onPress={retrySession}>
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </TouchableOpacity>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorTitle}>Connection Issue</Text>
+          <Text style={styles.errorMessage}>
+            {sessionError?.message || 'Unable to connect to the consultation service. Please check your connection and try again.'}
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={retrySession}>
+            <Text style={styles.retryButtonText}>🔄 Try Again</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -323,58 +483,96 @@ const ChatScreen: React.FC<Props> = ({route}) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+      
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {mobileNumber.slice(-2)}
-            </Text>
-          </View>
+        <View style={styles.headerLeft}>
+          <DoctorAvatar size={50} />
           <View style={styles.headerInfo}>
-            <Text style={styles.headerTitle}>+91 {mobileNumber}</Text>
+            <Text style={styles.headerTitle}>Dr. HridAI</Text>
+            <Text style={styles.headerSpecialty}>AI Cardiologist</Text>
             <View style={styles.statusContainer}>
-              {(connectionState === SocketConnectionState.CONNECTING ||
-                connectionState === SocketConnectionState.RECONNECTING) && (
-                <ActivityIndicator size="small" color={connectionStatus.color} style={styles.statusIndicator} />
-              )}
               <View style={[styles.statusDot, { backgroundColor: connectionStatus.color }]} />
-              <Text style={[styles.headerSubtitle, { color: connectionStatus.color }]}>
+              <Text style={[styles.statusText, { color: connectionStatus.color }]}>
                 {connectionStatus.text}
               </Text>
             </View>
           </View>
         </View>
-        {socketError && (
-          <TouchableOpacity style={styles.reconnectButton} onPress={() => connect()}>
-            <Text style={styles.reconnectButtonText}>Tap to Reconnect</Text>
-          </TouchableOpacity>
-        )}
+        
+        <View style={styles.headerRight}>
+          <View style={styles.credentialBadge}>
+            <Text style={styles.credentialIcon}>🏥</Text>
+            <Text style={styles.credentialText}>Verified</Text>
+          </View>
+        </View>
       </View>
 
-      {typingUser && (
-        <View style={styles.typingIndicator}>
-          <Text style={styles.typingText}>Someone is typing...</Text>
-        </View>
+      {/* Patient Info Bar */}
+      <View style={styles.patientBar}>
+        <Text style={styles.patientBarText}>
+          Patient ID: {userId} • Health ID: {healthId}
+        </Text>
+      </View>
+
+      {/* Reconnect Banner */}
+      {socketError && (
+        <TouchableOpacity style={styles.reconnectBanner} onPress={() => connect()}>
+          <Text style={styles.reconnectIcon}>⚡</Text>
+          <Text style={styles.reconnectText}>Connection lost. Tap to reconnect</Text>
+        </TouchableOpacity>
       )}
 
+      {/* Typing Indicator */}
+      {typingUser && <TypingIndicator />}
+
+      {/* Waiting for Response Indicator */}
+      {isWaitingForResponse && <RespondingIndicator />}
+
+      {/* Messages */}
       <FlatList
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.messagesList}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({animated: true})
-        }
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({animated: true})}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.consultationHeader}>
+            <Text style={styles.consultationDate}>
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </Text>
+            <View style={styles.consultationDivider} />
+          </View>
+        }
       />
 
+      {/* Quick Actions */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('I have chest pain')}>
+          <Text style={styles.quickActionText}>💔 Chest Pain</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('I feel shortness of breath')}>
+          <Text style={styles.quickActionText}>😮‍💨 Breathing</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickActionButton} onPress={() => setMessage('My heart is racing')}>
+          <Text style={styles.quickActionText}>💓 Palpitations</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Input Area */}
       <View style={styles.inputContainer}>
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
-            placeholder="Type a message..."
-            placeholderTextColor="#8B9DC3"
+            placeholder="Describe your symptoms..."
+            placeholderTextColor="#7A8FA6"
             value={message}
             onChangeText={handleTextChange}
             multiline
@@ -391,8 +589,15 @@ const ChatScreen: React.FC<Props> = ({route}) => {
           onPress={sendMessage}
           activeOpacity={0.7}
           disabled={!isConnected}>
-          <Text style={styles.sendButtonText}>➤</Text>
+          <Text style={styles.sendButtonIcon}>📤</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Disclaimer */}
+      <View style={styles.disclaimerBar}>
+        <Text style={styles.disclaimerText}>
+          ⚠️ This is AI-assisted guidance. For emergencies, call 112 immediately.
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -401,103 +606,142 @@ const ChatScreen: React.FC<Props> = ({route}) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#0D1B2A',
   },
+  // Loading States
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#0D1B2A',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    padding: 32,
   },
-  loadingText: {
+  loadingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 24,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.2)',
+  },
+  loadingIcon: {
+    fontSize: 64,
+    marginBottom: 20,
+  },
+  loadingSpinner: {
+    marginBottom: 20,
+  },
+  loadingTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 20,
-  },
-  loadingSubtext: {
-    color: '#8B9DC3',
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    backgroundColor: '#0A1628',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  errorIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  errorTitle: {
-    color: '#FF4444',
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 8,
   },
-  errorMessage: {
-    color: '#8B9DC3',
+  loadingSubtext: {
+    color: '#7A8FA6',
     fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
+    marginBottom: 20,
   },
-  retryButton: {
-    backgroundColor: '#00D9FF',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-  },
-  retryButtonText: {
-    color: '#0A1628',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  header: {
-    backgroundColor: 'rgba(0, 217, 255, 0.1)',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 217, 255, 0.2)',
-  },
-  headerContent: {
+  heartRateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#00D9FF',
+  heartRateIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  heartRateText: {
+    fontSize: 18,
+    color: '#DC3545',
+    fontWeight: '300',
+  },
+  // Error States
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#0D1B2A',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 32,
   },
-  avatarText: {
-    fontSize: 18,
+  errorCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 24,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.3)',
+  },
+  errorIcon: {
+    fontSize: 56,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    color: '#DC3545',
+    fontSize: 22,
     fontWeight: '700',
-    color: '#0A1628',
+    marginBottom: 12,
+  },
+  errorMessage: {
+    color: '#7A8FA6',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 22,
+  },
+  retryButton: {
+    backgroundColor: '#DC3545',
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 53, 69, 0.08)',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(220, 53, 69, 0.15)',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  doctorAvatar: {
+    backgroundColor: '#1B3A4B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#17A2B8',
+  },
+  doctorAvatarEmoji: {
+    fontSize: 22,
   },
   headerInfo: {
-    marginLeft: 12,
+    marginLeft: 14,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
-  headerSubtitle: {
+  headerSpecialty: {
     fontSize: 13,
-    color: '#00FF88',
+    color: '#17A2B8',
+    fontWeight: '500',
     marginTop: 2,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 4,
   },
   statusDot: {
     width: 8,
@@ -505,126 +749,317 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: 6,
   },
-  statusIndicator: {
-    marginRight: 6,
-  },
-  reconnectButton: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 68, 68, 0.2)',
-    borderRadius: 16,
-    alignSelf: 'flex-start',
-  },
-  reconnectButtonText: {
-    color: '#FF4444',
+  statusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  typingIndicator: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(0, 217, 255, 0.1)',
-  },
-  typingText: {
-    color: '#8B9DC3',
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
-  messagesList: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-  },
-  messageContainer: {
-    marginBottom: 12,
-  },
-  userMessageContainer: {
+  headerRight: {
     alignItems: 'flex-end',
   },
-  otherMessageContainer: {
+  credentialBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(23, 162, 184, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(23, 162, 184, 0.3)',
+  },
+  credentialIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  credentialText: {
+    fontSize: 11,
+    color: '#17A2B8',
+    fontWeight: '600',
+  },
+  // Patient Bar
+  patientBar: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  patientBarText: {
+    fontSize: 11,
+    color: '#6C8EAD',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  // Reconnect Banner
+  reconnectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  reconnectIcon: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  reconnectText: {
+    fontSize: 13,
+    color: '#DC3545',
+    fontWeight: '600',
+  },
+  // Typing Indicator
+  typingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(23, 162, 184, 0.05)',
+  },
+  typingBubble: {
+    marginLeft: 10,
+    backgroundColor: 'rgba(23, 162, 184, 0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  typingText: {
+    fontSize: 13,
+    color: '#17A2B8',
+    fontStyle: 'italic',
+  },
+  // Responding Indicator
+  respondingContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(220, 53, 69, 0.05)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(220, 53, 69, 0.1)',
+  },
+  respondingBubble: {
+    marginLeft: 12,
+    backgroundColor: 'rgba(23, 162, 184, 0.12)',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 20,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(23, 162, 184, 0.25)',
+    maxWidth: '80%',
+  },
+  respondingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  respondingIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  respondingText: {
+    fontSize: 14,
+    color: '#17A2B8',
+    fontWeight: '600',
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    gap: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#DC3545',
+  },
+  respondingSubtextContainer: {
+    marginTop: 8,
+  },
+  respondingSubtext: {
+    fontSize: 12,
+    color: '#6C8EAD',
+    fontStyle: 'italic',
+  },
+  // Messages
+  messagesList: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  consultationHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  consultationDate: {
+    fontSize: 12,
+    color: '#6C8EAD',
+    fontWeight: '500',
+  },
+  consultationDivider: {
+    width: 100,
+    height: 1,
+    backgroundColor: 'rgba(108, 142, 173, 0.3)',
+    marginTop: 10,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'flex-end',
+  },
+  doctorRow: {
+    justifyContent: 'flex-start',
+  },
+  patientRow: {
+    justifyContent: 'flex-end',
+  },
+  messageContent: {
+    maxWidth: '75%',
+    marginHorizontal: 10,
+  },
+  doctorContent: {
     alignItems: 'flex-start',
   },
+  patientContent: {
+    alignItems: 'flex-end',
+  },
+  senderLabel: {
+    fontSize: 11,
+    color: '#17A2B8',
+    fontWeight: '600',
+    marginBottom: 4,
+    marginLeft: 4,
+  },
   messageBubble: {
-    maxWidth: '80%',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
   },
-  userBubble: {
-    backgroundColor: '#00D9FF',
-    borderBottomRightRadius: 4,
-  },
-  otherBubble: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  doctorBubble: {
+    backgroundColor: 'rgba(23, 162, 184, 0.12)',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.2)',
+    borderColor: 'rgba(23, 162, 184, 0.2)',
+  },
+  patientBubble: {
+    backgroundColor: '#DC3545',
+    borderBottomRightRadius: 4,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
     lineHeight: 22,
   },
-  userMessageText: {
-    color: '#0A1628',
+  doctorText: {
+    color: '#E8E8E8',
   },
-  otherMessageText: {
+  patientText: {
     color: '#FFFFFF',
   },
   timestamp: {
+    fontSize: 10,
+    marginTop: 4,
+    marginHorizontal: 4,
+  },
+  doctorTimestamp: {
+    color: '#6C8EAD',
+  },
+  patientTimestamp: {
+    color: '#6C8EAD',
+  },
+  patientAvatar: {
+    backgroundColor: '#DC3545',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(220, 53, 69, 0.5)',
+  },
+  patientAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  // Quick Actions
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    gap: 8,
+  },
+  quickActionButton: {
+    flex: 1,
+    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.2)',
+    alignItems: 'center',
+  },
+  quickActionText: {
     fontSize: 11,
-    marginTop: 6,
+    color: '#E8E8E8',
+    fontWeight: '600',
   },
-  userTimestamp: {
-    color: 'rgba(10, 22, 40, 0.6)',
-    textAlign: 'right',
-  },
-  otherTimestamp: {
-    color: '#8B9DC3',
-  },
+  // Input Area
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 217, 255, 0.2)',
+    borderTopColor: 'rgba(220, 53, 69, 0.15)',
   },
   inputWrapper: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.3)',
+    borderColor: 'rgba(160, 180, 200, 0.2)',
     marginRight: 12,
     maxHeight: 120,
   },
   input: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#FFFFFF',
     paddingHorizontal: 20,
     paddingVertical: 12,
     maxHeight: 100,
   },
   sendButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0, 217, 255, 0.3)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(220, 53, 69, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.4)',
   },
   sendButtonActive: {
-    backgroundColor: '#00D9FF',
+    backgroundColor: '#DC3545',
+    borderColor: '#DC3545',
   },
   sendButtonDisabled: {
-    backgroundColor: 'rgba(139, 157, 195, 0.3)',
+    backgroundColor: 'rgba(108, 117, 125, 0.3)',
+    borderColor: 'rgba(108, 117, 125, 0.3)',
   },
-  sendButtonText: {
-    fontSize: 20,
-    color: '#FFFFFF',
+  sendButtonIcon: {
+    fontSize: 22,
+  },
+  // Disclaimer
+  disclaimerBar: {
+    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(220, 53, 69, 0.2)',
+  },
+  disclaimerText: {
+    fontSize: 10,
+    color: '#DC3545',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });
 
 export default ChatScreen;
-

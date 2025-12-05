@@ -6,11 +6,10 @@ import AppNavigator from './src/navigation/AppNavigator';
 const App: React.FC = () => {
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor="#0A1628" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D1B2A" />
       <AppNavigator />
     </SafeAreaProvider>
   );
 };
 
 export default App;
-

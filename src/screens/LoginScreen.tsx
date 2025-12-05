@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Switch,
 } from 'react-native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/types';
@@ -22,10 +23,52 @@ type Props = {
   navigation: LoginScreenNavigationProp;
 };
 
+// Heart Icon Component
+const HeartIcon = () => (
+  <View style={styles.heartContainer}>
+    <Text style={styles.heartIcon}>❤️</Text>
+    <View style={styles.heartPulse}>
+      <View style={styles.ecgLine}>
+        <Text style={styles.ecgText}>~∿∿~</Text>
+      </View>
+    </View>
+  </View>
+);
+
+// Stethoscope decoration
+const StethoscopeDecor = () => (
+  <View style={styles.stethoscopeDecor}>
+    <Text style={styles.stethoscopeEmoji}>🩺</Text>
+  </View>
+);
+
+// Default credentials
+const DEFAULT_CREDENTIALS = {
+  healthId: 'MQNE-5493',
+  mobileNumber: '7021066279',
+  userId: '176130',
+};
+
 const LoginScreen: React.FC<Props> = ({navigation}) => {
-  const [healthId, setHealthId] = useState('MQNE-5493');
-  const [mobileNumber, setMobileNumber] = useState('7021066279');
-  const [userId, setUserId] = useState('176130');
+  const [useDefaultCredentials, setUseDefaultCredentials] = useState(true);
+  const [healthId, setHealthId] = useState(DEFAULT_CREDENTIALS.healthId);
+  const [mobileNumber, setMobileNumber] = useState(DEFAULT_CREDENTIALS.mobileNumber);
+  const [userId, setUserId] = useState(DEFAULT_CREDENTIALS.userId);
+
+  const handleToggleDefault = (value: boolean) => {
+    setUseDefaultCredentials(value);
+    if (value) {
+      // Prefill with default credentials
+      setHealthId(DEFAULT_CREDENTIALS.healthId);
+      setMobileNumber(DEFAULT_CREDENTIALS.mobileNumber);
+      setUserId(DEFAULT_CREDENTIALS.userId);
+    } else {
+      // Clear fields for manual entry
+      setHealthId('');
+      setMobileNumber('');
+      setUserId('');
+    }
+  };
 
   const validateMobileNumber = (number: string): boolean => {
     const mobileRegex = /^[0-9]{10}$/;
@@ -57,7 +100,6 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
   };
 
   const handleMobileChange = (text: string) => {
-    // Only allow numeric input
     const numericText = text.replace(/[^0-9]/g, '');
     if (numericText.length <= 10) {
       setMobileNumber(numericText);
@@ -73,20 +115,68 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled">
+
+        {/* Background Pattern */}
+        <View style={styles.backgroundPattern}>
+          <View style={styles.patternCircle1} />
+          <View style={styles.patternCircle2} />
+          <View style={styles.patternCircle3} />
+        </View>
+
         <View style={styles.content}>
+          {/* Header with Logo */}
           <View style={styles.header}>
-            <Text style={styles.logo}>Team11</Text>
-            <Text style={styles.subtitle}>Connect & Chat</Text>
+            <HeartIcon />
+            <Text style={styles.logo}>HridAI</Text>
+            <Text style={styles.tagline}>Your Cardiac Health Companion</Text>
+            <View style={styles.subtitleContainer}>
+              <StethoscopeDecor />
+              <Text style={styles.subtitle}>
+                AI-Powered Cardiology Assistant
+              </Text>
+            </View>
           </View>
 
+          {/* Medical Info Banner */}
+          <View style={styles.infoBanner}>
+            <Text style={styles.infoIcon}>🏥</Text>
+            <Text style={styles.infoText}>
+              Connect with our AI cardiologist for personalized heart health guidance
+            </Text>
+          </View>
+
+          {/* Form Container */}
           <View style={styles.formContainer}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>Patient Login</Text>
+              <View style={styles.formDivider} />
+            </View>
+
+            {/* Default Credentials Toggle */}
+            <View style={styles.toggleContainer}>
+              <View style={styles.toggleLabelContainer}>
+                <Text style={styles.toggleIcon}>🔑</Text>
+                <Text style={styles.toggleLabel}>Use Default Credentials</Text>
+              </View>
+              <Switch
+                value={useDefaultCredentials}
+                onValueChange={handleToggleDefault}
+                trackColor={{false: 'rgba(160, 180, 200, 0.3)', true: 'rgba(220, 53, 69, 0.5)'}}
+                thumbColor={useDefaultCredentials ? '#DC3545' : '#A0B4C8'}
+                ios_backgroundColor="rgba(160, 180, 200, 0.3)"
+              />
+            </View>
+
             {/* Health ID Input */}
-            <Text style={styles.label}>Health ID</Text>
+            <Text style={styles.label}>
+              <Text style={styles.labelIcon}>🆔 </Text>
+              Health ID
+            </Text>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.inputFull}
-                placeholder="Enter your Health ID"
-                placeholderTextColor="#8B9DC3"
+                placeholder="Enter your Health ID (e.g., ABHA ID)"
+                placeholderTextColor="#7A8FA6"
                 value={healthId}
                 onChangeText={setHealthId}
                 autoCapitalize="none"
@@ -95,13 +185,16 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
             </View>
 
             {/* Mobile Number Input */}
-            <Text style={styles.label}>Mobile Number</Text>
+            <Text style={styles.label}>
+              <Text style={styles.labelIcon}>📱 </Text>
+              Mobile Number
+            </Text>
             <View style={styles.inputContainer}>
               <Text style={styles.countryCode}>+91</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter 10-digit mobile number"
-                placeholderTextColor="#8B9DC3"
+                placeholderTextColor="#7A8FA6"
                 value={mobileNumber}
                 onChangeText={handleMobileChange}
                 keyboardType="phone-pad"
@@ -110,12 +203,15 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
             </View>
 
             {/* User ID Input */}
-            <Text style={styles.label}>User ID</Text>
+            <Text style={styles.label}>
+              <Text style={styles.labelIcon}>👤 </Text>
+              Patient ID
+            </Text>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.inputFull}
-                placeholder="Enter your User ID"
-                placeholderTextColor="#8B9DC3"
+                placeholder="Enter your Patient ID"
+                placeholderTextColor="#7A8FA6"
                 value={userId}
                 onChangeText={setUserId}
                 autoCapitalize="none"
@@ -123,20 +219,41 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
               />
             </View>
 
+            {/* Continue Button */}
             <TouchableOpacity
-              style={[
-                styles.button,
-                isFormValid && styles.buttonActive,
-              ]}
+              style={[styles.button, isFormValid ? styles.buttonActive : null]}
               onPress={handleContinue}
               activeOpacity={0.8}>
-              <Text style={styles.buttonText}>Continue to Chat</Text>
+              <Text style={styles.buttonIcon}>💬</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  isFormValid ? styles.buttonTextActive : null,
+                ]}>
+                Start Consultation
+              </Text>
             </TouchableOpacity>
           </View>
 
+          {/* Trust Indicators */}
+          <View style={styles.trustContainer}>
+            <View style={styles.trustItem}>
+              <Text style={styles.trustIcon}>🔒</Text>
+              <Text style={styles.trustText}>HIPAA Compliant</Text>
+            </View>
+            <View style={styles.trustItem}>
+              <Text style={styles.trustIcon}>🛡️</Text>
+              <Text style={styles.trustText}>End-to-End Encrypted</Text>
+            </View>
+          </View>
+
+          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              By continuing, you agree to our Terms of Service
+              By continuing, you agree to our Terms of Service and Privacy Policy
+            </Text>
+            <Text style={styles.disclaimerText}>
+              ⚠️ For emergencies, please call 112 or visit the nearest hospital
             </Text>
           </View>
         </View>
@@ -148,109 +265,293 @@ const LoginScreen: React.FC<Props> = ({navigation}) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#0D1B2A',
   },
   scrollContent: {
     flexGrow: 1,
+  },
+  backgroundPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  patternCircle1: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(220, 53, 69, 0.08)',
+  },
+  patternCircle2: {
+    position: 'absolute',
+    bottom: 100,
+    left: -80,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(220, 53, 69, 0.05)',
+  },
+  patternCircle3: {
+    position: 'absolute',
+    top: '40%',
+    right: -50,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(23, 162, 184, 0.06)',
   },
   content: {
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
+    paddingVertical: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: 24,
+  },
+  heartContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  heartIcon: {
+    fontSize: 56,
+  },
+  heartPulse: {
+    marginTop: -8,
+  },
+  ecgLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ecgText: {
+    fontSize: 24,
+    color: '#DC3545',
+    fontWeight: '300',
+    letterSpacing: 2,
   },
   logo: {
-    fontSize: 48,
+    fontSize: 52,
     fontWeight: '800',
-    color: '#00D9FF',
-    letterSpacing: 2,
-    textShadowColor: 'rgba(0, 217, 255, 0.4)',
+    color: '#DC3545',
+    letterSpacing: 3,
+    textShadowColor: 'rgba(220, 53, 69, 0.4)',
     textShadowOffset: {width: 0, height: 0},
     textShadowRadius: 20,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#8B9DC3',
+  tagline: {
+    fontSize: 15,
+    color: '#E8E8E8',
+    marginTop: 6,
+    letterSpacing: 1,
+    fontWeight: '500',
+  },
+  subtitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 8,
-    letterSpacing: 4,
+  },
+  stethoscopeDecor: {
+    marginRight: 8,
+  },
+  stethoscopeEmoji: {
+    fontSize: 16,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#17A2B8',
+    letterSpacing: 2,
     textTransform: 'uppercase',
+    fontWeight: '600',
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(23, 162, 184, 0.15)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(23, 162, 184, 0.3)',
+  },
+  infoIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#B8D4E3',
+    lineHeight: 18,
   },
   formContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.2)',
+    borderColor: 'rgba(220, 53, 69, 0.2)',
+    shadowColor: '#DC3545',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  formHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  formDivider: {
+    width: 60,
+    height: 3,
+    backgroundColor: '#DC3545',
+    borderRadius: 2,
+    marginTop: 12,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.2)',
+  },
+  toggleLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleIcon: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    color: '#E8E8E8',
+    fontWeight: '600',
   },
   label: {
+    fontSize: 13,
+    color: '#A0B4C8',
+    marginBottom: 10,
+    letterSpacing: 0.5,
+    fontWeight: '600',
+  },
+  labelIcon: {
     fontSize: 14,
-    color: '#8B9DC3',
-    marginBottom: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.3)',
-    marginBottom: 24,
+    backgroundColor: 'rgba(13, 27, 42, 0.8)',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(160, 180, 200, 0.2)',
+    marginBottom: 20,
   },
   countryCode: {
-    fontSize: 18,
-    color: '#00D9FF',
+    fontSize: 17,
+    color: '#17A2B8',
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderRightWidth: 1,
-    borderRightColor: 'rgba(0, 217, 255, 0.3)',
+    borderRightColor: 'rgba(160, 180, 200, 0.2)',
+    fontWeight: '600',
   },
   input: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 17,
     color: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   inputFull: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 17,
     color: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   button: {
-    backgroundColor: 'rgba(0, 217, 255, 0.3)',
-    borderRadius: 12,
-    paddingVertical: 16,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(220, 53, 69, 0.25)',
+    borderRadius: 14,
+    paddingVertical: 18,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.5)',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(220, 53, 69, 0.4)',
+    marginTop: 8,
   },
   buttonActive: {
-    backgroundColor: '#00D9FF',
-    borderColor: '#00D9FF',
+    backgroundColor: '#DC3545',
+    borderColor: '#DC3545',
+    shadowColor: '#DC3545',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  buttonIcon: {
+    fontSize: 18,
+    marginRight: 10,
   },
   buttonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: 'rgba(255, 255, 255, 0.6)',
     letterSpacing: 1,
   },
+  buttonTextActive: {
+    color: '#FFFFFF',
+  },
+  trustContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 28,
+    gap: 24,
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trustIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  trustText: {
+    fontSize: 12,
+    color: '#6C8EAD',
+    fontWeight: '500',
+  },
   footer: {
-    marginTop: 40,
+    marginTop: 32,
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 12,
-    color: '#5A6B8C',
+    fontSize: 11,
+    color: '#5A7089',
     textAlign: 'center',
+    lineHeight: 16,
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#DC3545',
+    textAlign: 'center',
+    marginTop: 12,
+    fontWeight: '500',
   },
 });
 
 export default LoginScreen;
-
